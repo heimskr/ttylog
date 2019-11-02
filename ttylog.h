@@ -14,4 +14,6 @@ ssize_t try_write(int fd, const char *buffer, size_t size);
 
 ssize_t find_char(const char *str, char ch);
 
+#define IGNORE_STYLES
+
 #endif

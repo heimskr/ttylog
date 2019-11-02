@@ -1,5 +1,6 @@
 .tty*
 .vscode
+.log
 
 # Prerequisites
 *.d

@@ -153,8 +153,7 @@ ssize_t write_escaped(int fd, const char *buffer, size_t size) {
 	for (size_t i = 0; i < size; ++i) {
 		ch = buffer[i];
 		if (ch == '\x1b') {
-			if (i && buffer[i] != '\n')
-				write(fd, "\n", 1);
+			const int write_nl = i && buffer[i] != '\n';
 
 			size_t j = 0;
 			char next = i == size - 1? '\0' : buffer[i + 1];
@@ -176,6 +175,18 @@ ssize_t write_escaped(int fd, const char *buffer, size_t size) {
 								color = 4; break; // scrolling: blue
 							default:  color = -1;
 						}
+
+#ifdef IGNORE_STYLES
+						if (jch == 'm') {
+							i = j;
+							j = 0;
+							break;
+						}
+#endif
+
+						if (write_nl)
+							write(fd, "\n", 1);
+
 						if (color == -1) {
 							total += try_write(fd, "\x1b[2", 3);
 						} else {
