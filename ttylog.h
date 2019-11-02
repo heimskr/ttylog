@@ -10,5 +10,6 @@ void setattr(const struct termios *attrs);
 void cbreak();
 
 ssize_t write_escaped(int fd, const char *buffer, size_t size);
+ssize_t try_write(int fd, const char *buffer, size_t size);
 
 #endif

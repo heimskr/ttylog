@@ -148,24 +148,61 @@ void cbreak() {
 
 ssize_t write_escaped(int fd, const char *buffer, size_t size) {
 	char ch;
-	int written, total = 0;
+	ssize_t written, total = 0;
 
-	for (int i = 0; i < size; ++i) {
+	for (size_t i = 0; i < size; ++i) {
 		ch = buffer[i];
 		if (ch == '\x1b') {
 			if (i && buffer[i] != '\n')
 				write(fd, "\n", 1);
-			written = write(fd, "\x1b[2m^\x1b[22m", 10);
-		} else if (ch == '\r') {
-			written = write(fd, "\x1b[2m\\r\x1b[22m", 11);
-		} else if (ch == '\n') {
-			written = write(fd, "\x1b[2m\\n\x1b[22m\n", 12);
-		} else {
-			written = write(fd, &ch, 1);
-		}
 
-		if (written == -1)
-			return -1;
+			size_t j;
+			for (j = i + 2; j < size; ++j) {
+				char jch = buffer[j];
+				if (0x40 <= jch && jch <= 0x7e) {
+					char color;
+					switch (jch) {
+						case 'r':
+							color = 3; break; // top/bottom margins: yellow
+						case 'm':
+							color = 2; break; // styling: green
+						case 'J': case 'K':
+							color = 1; break; // erasing: red
+						case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
+							color = 6; break; // movement: cyan
+						case 'S': case 'T':
+							color = 4; break; // scrolling: blue
+						default:  color = -1;
+					}
+					if (color == -1) {
+						total += try_write(fd, "\x1b[2", 3);
+					} else {
+						total += try_write(fd, "\x1b[3", 3);
+						color += '0';
+						total += try_write(fd, &color, 1);
+					}
+
+					total += try_write(fd, "m^", 2);
+					total += try_write(fd, buffer + i + 1, j - i);
+					total += try_write(fd, "\x1b[0m", 4);
+					i = j;
+					j = 0;
+					break;
+				}
+			}
+
+			if (j == 0) {
+				continue;
+			} else {
+				written = try_write(fd, "\x1b[2m^\x1b[22m", 10);
+			}
+		} else if (ch == '\r') {
+			written = try_write(fd, "\x1b[2m\\r\x1b[22m", 11);
+		} else if (ch == '\n') {
+			written = try_write(fd, "\x1b[2m\\n\x1b[22m\n", 12);
+		} else {
+			written = try_write(fd, &ch, 1);
+		}
 
 		if (written == 0)
 			break;
@@ -174,4 +211,14 @@ ssize_t write_escaped(int fd, const char *buffer, size_t size) {
 	}
 
 	return total;
+}
+
+ssize_t try_write(int fd, const char *buffer, size_t size) {
+	ssize_t written = write(fd, buffer, size);
+	if (written == -1) {
+		fprintf(stderr, "write(%d) failed: %s\n", fd, strerror(errno));
+		exit(1);
+	}
+
+	return written;
 }
