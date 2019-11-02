@@ -5,4 +5,10 @@
 
 void run_child(const char *slave_name, int argc, char **argv);
 
+struct termios getattr();
+void setattr(const struct termios *attrs);
+void cbreak();
+
+ssize_t write_escaped(int fd, const char *buffer, size_t size);
+
 #endif
