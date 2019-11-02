@@ -13,14 +13,32 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	int ptmx_fd = open("/dev/ptmx", O_RDWR);
+	int ptmx_fd = posix_openpt(O_RDWR);
+	if (ptmx_fd < 0) {
+		fprintf(stderr, "Error opening pty: %s\n", strerror(errno));
+		exit(1);
+	}
+
 	const char *name = ptsname(ptmx_fd);
 	printf("ptmx_fd[%d], name[%s]\n", ptmx_fd, name);
+
+	if (grantpt(ptmx_fd) < 0) {
+		fprintf(stderr, "grantpt failed: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	if (unlockpt(ptmx_fd) < 0) {
+		fprintf(stderr, "unlockpt failed: %s\n", strerror(errno));
+		exit(1);
+	}
 
 	int pid = fork();
 	if (pid == 0) {
 		run_child(name, argc - 1, argv + 1);
 		exit(0);
+	} else if (pid == -1) {
+		fprintf(stderr, "fork() failed: %s\n", strerror(errno));
+		exit(1);
 	}
 
 	int log_fd = open(".ttylog", O_CREAT | O_APPEND | O_WRONLY);
