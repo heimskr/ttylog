@@ -156,58 +156,72 @@ ssize_t write_escaped(int fd, const char *buffer, size_t size) {
 			if (i && buffer[i] != '\n')
 				write(fd, "\n", 1);
 
-			size_t j;
-			for (j = i + 2; j < size; ++j) {
-				char jch = buffer[j];
-				if (0x40 <= jch && jch <= 0x7e) {
-					char color;
-					switch (jch) {
-						case 'r':
-							color = 3; break; // top/bottom margins: yellow
-						case 'm':
-							color = 2; break; // styling: green
-						case 'J': case 'K':
-							color = 1; break; // erasing: red
-						case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
-							color = 6; break; // movement: cyan
-						case 'S': case 'T':
-							color = 4; break; // scrolling: blue
-						default:  color = -1;
-					}
-					if (color == -1) {
-						total += try_write(fd, "\x1b[2", 3);
-					} else {
-						total += try_write(fd, "\x1b[3", 3);
-						color += '0';
-						total += try_write(fd, &color, 1);
-					}
+			size_t j = 0;
+			char next = i == size - 1? '\0' : buffer[i + 1];
+			if (next == '[') {
+				for (j = i + 2; j < size; ++j) {
+					char jch = buffer[j];
+					if (0x40 <= jch && jch <= 0x7e) {
+						char color;
+						switch (jch) {
+							case 'r':
+								color = 3; break; // top/bottom margins: yellow
+							case 'm':
+								color = 2; break; // styling: green
+							case 'J': case 'K':
+								color = 1; break; // erasing: red
+							case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H':
+								color = 6; break; // movement: cyan
+							case 'S': case 'T':
+								color = 4; break; // scrolling: blue
+							default:  color = -1;
+						}
+						if (color == -1) {
+							total += try_write(fd, "\x1b[2", 3);
+						} else {
+							total += try_write(fd, "\x1b[3", 3);
+							color += '0';
+							total += try_write(fd, &color, 1);
+						}
 
-					total += try_write(fd, "m^", 2);
-					total += try_write(fd, buffer + i + 1, j - i);
-					total += try_write(fd, "\x1b[0m", 4);
-					i = j;
-					j = 0;
-					break;
+						total += try_write(fd, "m^", 2);
+						total += try_write(fd, buffer + i + 1, j - i);
+						total += try_write(fd, "\x1b[0m", 4);
+						i = j;
+						j = 0;
+						break;
+					}
 				}
+			} else if (find_char("<=>NODME78HcFGABCIJKZ", next) != -1) {
+				// http://ascii-table.com/ansi-escape-sequences-vt-100.php
+				total += try_write(fd, "\x1b[1m", 4);
+				total += try_write(fd, &next, 1);
+				total += try_write(fd, "\x1b[22m", 5);
 			}
 
 			if (j == 0) {
 				continue;
 			} else {
 				written = try_write(fd, "\x1b[2m^\x1b[22m", 10);
+				if (written == 0)
+					break;
+				total += written;
 			}
-		} else if (ch == '\r') {
-			written = try_write(fd, "\x1b[2m\\r\x1b[22m", 11);
-		} else if (ch == '\n') {
-			written = try_write(fd, "\x1b[2m\\n\x1b[22m\n", 12);
 		} else {
-			written = try_write(fd, &ch, 1);
+			if (ch == '\r') {
+				written = try_write(fd, "\x1b[2m\\r\x1b[22m", 11);
+			} else if (ch == '\n') {
+				written = try_write(fd, "\x1b[2m\\n\x1b[22m\n", 12);
+			} else {
+				written = try_write(fd, &ch, 1);
+			}
+
+			if (written == 0)
+				break;
+
+			total += written;
 		}
 
-		if (written == 0)
-			break;
-
-		total += written;
 	}
 
 	return total;
@@ -221,4 +235,13 @@ ssize_t try_write(int fd, const char *buffer, size_t size) {
 	}
 
 	return written;
+}
+
+ssize_t find_char(const char *str, char ch) {
+	for (size_t i = 0; str[i] != '\0'; ++i) {
+		if (str[i] == ch)
+			return i;
+	}
+
+	return -1;
 }
